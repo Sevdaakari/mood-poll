@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How was your day?</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="card">
+    <h1>How was your day?</h1>
+
+    <div class="buttons">
+      <button class="btn good" onclick="vote('good')"><span>😄</span>Good</button>
+      <button class="btn ok" onclick="vote('ok')"><span>😐</span>Okay</button>
+      <button class="btn bad" onclick="vote('bad')"><span>😞</span>Bad</button>
+    </div>
+
+    <h2>Everyone's answers (<span id="total">0</span> votes)</h2>
+
+    <div class="row">
+      <span class="emoji">😄</span>
+      <div class="track"><div id="bar-good" class="bar good"></div></div>
+      <span id="pct-good" class="pct">0%</span>
+    </div>
+    <div class="row">
+      <span class="emoji">😐</span>
+      <div class="track"><div id="bar-ok" class="bar ok"></div></div>
+      <span id="pct-ok" class="pct">0%</span>
+    </div>
+    <div class="row">
+      <span class="emoji">😞</span>
+      <div class="track"><div id="bar-bad" class="bar bad"></div></div>
+      <span id="pct-bad" class="pct">0%</span>
+    </div>
+  </main>
+
+  <script>
+    const ANSWERS = ["good", "ok", "bad"];
+
+    function render(stats) {
+      document.getElementById("total").textContent = stats.total;
+      for (const a of ANSWERS) {
+        document.getElementById("bar-" + a).style.width = stats.percents[a] + "%";
+        document.getElementById("pct-" + a).textContent =
+          stats.percents[a] + "% (" + stats.counts[a] + ")";
+      }
+    }
+
+    async function loadStats() {
+      const res = await fetch("/stats");
+      render(await res.json());
+    }
+
+    async function vote(answer) {
+      const res = await fetch("/vote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer }),
+      });
+      render(await res.json());
+    }
+
+    loadStats();
+  </script>
+</body>
+</html>
