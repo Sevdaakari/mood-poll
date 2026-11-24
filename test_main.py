@@ -22,7 +22,7 @@ def test_vote_is_counted(tmp_path, monkeypatch):
     stats = client.get("/stats").json()
     assert stats["total"] == 3
     assert stats["counts"]["good"] == 2
-    assert stats["percents"]["good"] == 70
+    assert stats["percents"]["good"] == 67
 
 
 def test_invalid_answer_is_rejected(tmp_path, monkeypatch):
