@@ -1,0 +1,34 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare SSH
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          USER_NAME: ${{ secrets.EC2_USER }}
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}:latest"
+          ssh -i ~/.ssh/deploy_key "$USER_NAME@$HOST" "IMAGE=$IMAGE bash -s" <<'EOF'
+          set -e
+          docker pull "$IMAGE"
+          docker rm -f mood-poll || true
+          docker run -d --name mood-poll --restart unless-stopped \
+            -p 8000:8000 -v mood-poll-data:/data "$IMAGE"
+          sleep 5
+          curl -fsS http://localhost:8000/health
+          EOF

@@ -1,11 +1,13 @@
 import os
 import sqlite3
+import time
 from pathlib import Path
 from typing import Literal, get_args
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel
 
 BASE_DIR = Path(__file__).parent
@@ -16,6 +18,31 @@ ANSWERS = get_args(AnswerType)
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+
+# --- Prometheus metrics ---
+REQUESTS = Counter(
+    "http_requests_total", "Total HTTP requests", ["method", "path", "status"]
+)
+LATENCY = Histogram(
+    "http_request_duration_seconds", "HTTP request latency in seconds", ["path"]
+)
+VOTES = Counter("mood_votes_total", "Number of votes by answer", ["answer"])
+
+
+@app.middleware("http")
+async def track_metrics(request: Request, call_next):
+    start = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        route = request.scope.get("route")
+        path = route.path if route else "unmatched"
+        if path != "/metrics":
+            REQUESTS.labels(request.method, path, str(status)).inc()
+            LATENCY.labels(path).observe(time.perf_counter() - start)
 
 
 class Vote(BaseModel):
@@ -54,6 +81,7 @@ def vote(v: Vote):
     conn.execute("INSERT INTO votes (answer) VALUES (?)", (v.answer,))
     conn.commit()
     conn.close()
+    VOTES.labels(v.answer).inc()
     return get_stats()
 
 
@@ -65,3 +93,8 @@ def stats():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
